@@ -49,17 +49,26 @@ object openAIClient {
   implicit val materializer: Materializer = Materializer(system)
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  val apiKey = ""
+  val apiKey = "sk-proj-tNBqkHwNartwbfIzSxcWT3BlbkFJQABvHUKtC5rIVpoQwZwa"
   
   val ws: StandaloneWSClient = StandaloneAhcWSClient()
   
-  val assistantInstructions = "You are assistant in analyzing company data. " +
-    "I will work with you to choose right approaches for data analysis. " +
-    "Return response in JSON format. Never add other text to a reply. " +
-    "Answer immediately if you don't have an answer. " +
-    "If you answer correctly, I will buy you ice cream."
+  val assistantInstructions = "Use the uploaded knowledge to answer the question. " +
+    "If you don't know the answer, just say that you don't know; don't try to make up an answer."
 
-  def createAssistant: Future[OpenAIObject] = for {
+  def createVectorStore(fileIds: Seq[String]): Future[OpenAIObject] = for {
+    vectorStore <- ws.url("https://api.openai.com/v1/vector_stores")
+      .withHttpHeaders(
+        "OpenAI-Beta" -> "assistants=v2",
+        "Authorization" -> s"Bearer $apiKey"
+      )
+      .post(Json.obj(
+        "file_ids" -> fileIds
+      ))
+      .map(res => Json.parse(res.body).as[OpenAIObject])
+  } yield vectorStore
+
+  def createAssistant(fileIds: Seq[String]): Future[OpenAIObject] = for {
     assistant <- ws.url("https://api.openai.com/v1/assistants")
       .withHttpHeaders(
         "OpenAI-Beta" -> "assistants=v2",
@@ -71,56 +80,19 @@ object openAIClient {
         "instructions" -> assistantInstructions,
         "tools" -> Seq(
           Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "numberOfRegistredCompanies",
-              "description" -> "Return number of registered companies.",
-              "parameters" -> Json.obj()
-            )
-          ),
-          Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "numberOfDifferentCertifications",
-              "description" -> "Return number of different certifications.",
-              "parameters" -> Json.obj()
-            )
-          ),
-          Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "mostCommonCertification",
-              "description" -> "Return number the most common certification.",
-              "parameters" -> Json.obj()
-            )
-          ),
-          Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "numberOfCompaniesMissingWebsites",
-              "description" -> "Return number of companies are missing websites",
-              "parameters" -> Json.obj()
-            )
-          ),
-          Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "mostCommonCEOFirstMame",
-              "description" -> "Most common first name of a CEO in a certified workshop",
-              "parameters" -> Json.obj()
-            )
-          ),
-          Json.obj(
-            "type" -> "function",
-            "function" -> Json.obj(
-              "name" -> "mostPopularYearWorkshopIncorporate",
-              "description" -> "Most popular year to incorporate a workshop",
-              "parameters" -> Json.obj()
-            )
+            "type" -> "file_search",
+          )
+        ),
+        "tool_resources" -> Json.obj(
+          "file_search" -> Json.obj(
+            "vector_stores" -> Seq(Json.obj("file_ids" -> fileIds))  
           )
         )
       ))
-      .map(res => Json.parse(res.body).as[OpenAIObject])
+      .map(res => {
+        print(res.body)
+        Json.parse(res.body).as[OpenAIObject]
+      })
   } yield assistant
   
   def createThread: Future[OpenAIObject] = for {
@@ -140,7 +112,10 @@ object openAIClient {
         "Authorization" -> s"Bearer $apiKey"
       )
       .post(Json.obj("role" -> "user", "content" -> message))
-      .map(res => Json.parse(res.body).as[OpenAIObject])
+      .map(res => {
+        print(res.body)
+        Json.parse(res.body).as[OpenAIObject]
+      })
   } yield message
 
   def listMessage(threadId: String): Future[OpenAIObject] = for {
@@ -179,22 +154,7 @@ object openAIClient {
       .get()
       .map(res => Json.parse(res.body).as[OpenAIRun])
   } yield runStatus
-
-  def submitToolsOutputs(threadId: String, runId: String, toolCallId: String, output: String): Future[OpenAISubmitToolsOutputs] = for {
-    toolsOutputs <- ws.url(s"https://api.openai.com/v1/threads/$threadId/runs/$runId/submit_tool_outputs")
-      .withHttpHeaders(
-        "OpenAI-Beta" -> "assistants=v2",
-        "Authorization" -> s"Bearer $apiKey"
-      )
-      .post(Json.obj("tool_outputs" -> Seq(
-        Json.obj(
-          "tool_call_id" -> toolCallId,
-          "output" -> output
-        )
-      )))
-      .map(res => Json.parse(res.body).as[OpenAISubmitToolsOutputs])
-  } yield toolsOutputs
-
+  
   def runSteps(threadId: String, runId: String): Future[OpenAIRun] = for {
     runStatus <- ws.url(s"https://api.openai.com/v1/threads/$threadId/runs/$runId/steps")
       .withHttpHeaders(

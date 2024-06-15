@@ -1,4 +1,4 @@
-import openAIClient.{checkRunStatus, createAssistant, createThread, listMessage, run, sendMessage, submitToolsOutputs}
+import openAIClient.{checkRunStatus, createAssistant, createThread, listMessage, run, sendMessage, createVectorStore}
 import akka.actor.ActorSystem
 import akka.actor.ActorSystem
 import akka.stream.Materializer
@@ -28,23 +28,25 @@ def main(): Unit = {
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
   
   val result = for {
-    assistantResponse <- createAssistant
+    assistantResponse <- createAssistant(Seq("file-xKjPLwJQEucgMLqORHvfYNIg"))
     threadResponse <- createThread
     runResponse <- run(assistantResponse.id, threadResponse.id)
   } yield {
     
     //thread_9iuvs4LUMfBQeGcUqPqDW3ry
-    sendMessage(threadResponse.id, "How many companies are registered?")
+    sendMessage(threadResponse.id, "Calculate how many companies are registered?")
       .map(res => print(res.id))
 
-    sendMessage(threadResponse.id, "How many different certifications exist?")
-      .map(res => print(res.id))
+//    sendMessage(threadResponse.id, "How many different certifications exist?")
+//      .map(res => print(res.id))
     
     
     while(true) {
-      Await.result(Future {
-        Thread.sleep(3000)
-      }, Duration(3000, "millis"))
+      Thread.sleep(5000)
+
+      listMessage(threadResponse.id).map(res => {
+        print(res)
+      })
       
       checkRunStatus(threadResponse.id, runResponse.id).map(run => {
         print(s"------------------------Run status: " + run.status + "\n")
@@ -53,45 +55,13 @@ def main(): Unit = {
           listMessage(threadResponse.id).map(res => {
             print(res)
           })
+          sendMessage(threadResponse.id, "Calculate how many companies are registered?")
+            .map(res => print(res.id))
+
         }
         
         if (run.status == "requires_action" && run.required_action.`type` == "submit_tool_outputs") {
           
-          run.required_action.submit_tool_outputs.tool_calls.foreach(openAIToolCall => {
-            print(s"------------openAIToolCall ID: " + openAIToolCall.id+ "\n")
-            print(s"------------openAIToolCall FUNCTION: " + openAIToolCall.function.name+ "\n")
-            
-            var output = ""
-
-            if(openAIToolCall.function.name == "numberOfRegistredCompanies") {
-              output = numberOfRegistredCompanies
-            }
-
-            if (openAIToolCall.function.name == "numberOfDifferentCertifications") {
-              output = numberOfDifferentCertifications
-            }
-
-            if (openAIToolCall.function.name == "mostCommonCertification") {
-              output = mostCommonCertification
-            }
-
-            if (openAIToolCall.function.name == "numberOfCompaniesMissingWebsites") {
-              output = mostCommonCertification
-            }
-
-            if (openAIToolCall.function.name == "mostCommonCEOFirstMame") {
-              output = mostCommonCertification
-            }
-
-            if (openAIToolCall.function.name == "mostPopularYearWorkshopIncorporate") {
-              output = mostCommonCertification
-            }
-
-            submitToolsOutputs(threadResponse.id, runResponse.id, openAIToolCall.id, output)
-              .map(res => {
-                println(s"------------submitToolsOutputs: $res")
-              })
-          })
         }
       })
     }
