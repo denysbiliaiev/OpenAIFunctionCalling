@@ -3,12 +3,11 @@ import com.github.tototoshi.csv.CSVReader
 import java.io.File
 import scala.concurrent.Future
 
-object statistic {
+object functionCalling {
   //val reader = CSVReader.open(new File("./openAIFiles/verksted3.csv"))
 
-  
   def numberOfRegistredCompanies: String = {
-    "3"
+    "13"
   }
 
   def numberOfDifferentCertifications: String = {
@@ -16,7 +15,11 @@ object statistic {
   }
 
   def mostCommonCertification: String = {
-    "cert"
+    "KONTROLLORGAN01B"
+  }
+
+  def registeredIdentifiers: String = {
+    "874170852,974170853"
   }
 
   def numberOfCompaniesMissingWebsites: String = {
@@ -28,6 +31,6 @@ object statistic {
   }
 
   def mostPopularYearWorkshopIncorporate: String = {
-    "2000"
+    "2020"
   }
 }
